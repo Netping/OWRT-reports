@@ -67,8 +67,6 @@ def applyconfig():
     global pollThread
     global ubusConnected
 
-    mutex.acquire()
-
     try:
         if not ubusConnected:
             ubus.connect()
@@ -78,8 +76,11 @@ def applyconfig():
             if confdict['.type'] == 'report' and confdict['.name'] == 'prototype':
                 default_report.name = confdict['name']
                 default_report.active = bool(int(confdict['state']))
-
-                #TODO fill another parameters
+                default_report.description = confdict['description']
+                default_report.callbacks = json.loads(confdict['callbacks'])
+                default_report.method = method_type_map[confdict['method']]
+                default_report.period = period_type_map[confdict['period']]
+                default_report.report_format = confdict['text']
 
             if confdict['.type'] == 'report' and confdict['.name'] != 'prototype':
                 exist = False
@@ -105,12 +106,42 @@ def applyconfig():
                     r.active = default_report.active
 
                 #TODO fill another parameters
+                try:
+                    r.description = confdict['description']
+                except:
+                    r.description = default_report.description
+
+                try:
+                    r.callbacks = json.loads(confdict['callbacks'])
+                except:
+                    r.callbacks = default_report.callbacks
+
+                try:
+                    r.method = method_type_map[confdict['method']]
+                except:
+                    r.method = default_report.method
+
+                try;
+                    r.period = period_type_map[confdict['period']]
+                except:
+                    r.period = default_report.period
+
+                try:
+                    r.report_format = confdict['text']
+                except;
+                    r.report_format = default_report.report_format
+
+                #TODO settings parse
+
+                mutex.acquire()
 
                 if reports.length() == max_reports:
                     journal.WriteLog(module_name, "Normal", "error", "Max reports exceeded")
                     continue
 
                 reports.append(r)
+
+                mutex.release()
 
         if not ubusConnected:
             ubus.disconnect()
@@ -121,8 +152,6 @@ def applyconfig():
 
     except Exception as ex:
         journal.WriteLog(module_name, "Normal", "error", "Can't connect to ubus " + str(ex))
-
-    mutex.release()
 
 if __name__ == "__main__":
     applyconfig()
