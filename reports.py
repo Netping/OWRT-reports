@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 import enum
 import ubus
+import json
+import time
 from datetime import datetime
 from threading import Thread
 from threading import Lock
@@ -47,21 +49,41 @@ period_type_map = { 'hourly' : period_type.hourly,
 mutex = Lock()
 pollThread = None
 ubusConnected = False
+poll_flag = True
 default_report = report()
 max_reports = 20
 
-def poll():
-    mutex.acquire()
+def reconfigure(event, data):
+    if data['config'] == confName:
+        mutex.acquire()
 
-    if not reports:
+        del reports[:]
+
         mutex.release()
-        return
 
-    for r in reports:
-        if r.active:
-            #TODO handle report
+        journal.WriteLog(module_name, "Normal", "notice", "Config changed!")
 
-    mutex.release()
+        applyconfig()
+
+def poll():
+    global poll_flag
+
+    while poll_flag:
+        mutex.acquire()
+
+        if not reports:
+            mutex.release()
+            time.sleep(1)
+            continue
+
+        for r in reports:
+            if r.active:
+                journal.WriteLog(module_name, "Normal", "notice", "Report name:" + r.name)
+                journal.WriteLog(module_name, "Normal", "notice", "Report description:" + r.description)
+                journal.WriteLog(module_name, "Normal", "notice", "Report callbacks:" + str(r.callbacks))
+                journal.WriteLog(module_name, "Normal", "notice", "Report settings:" + str(r.settings))
+
+        mutex.release()
 
 def applyconfig():
     global pollThread
@@ -121,21 +143,21 @@ def applyconfig():
                 except:
                     r.method = default_report.method
 
-                try;
+                try:
                     r.period = period_type_map[confdict['period']]
                 except:
                     r.period = default_report.period
 
                 try:
                     r.report_format = confdict['text']
-                except;
+                except:
                     r.report_format = default_report.report_format
 
                 #TODO settings parse
 
                 mutex.acquire()
 
-                if reports.length() == max_reports:
+                if len(reports) == max_reports:
                     journal.WriteLog(module_name, "Normal", "error", "Max reports exceeded")
                     continue
 
@@ -146,12 +168,24 @@ def applyconfig():
         if not ubusConnected:
             ubus.disconnect()
 
-        if not pollThread:
-            pollThread = Thread(target=poll, args=())
-            pollThread.start()
-
     except Exception as ex:
         journal.WriteLog(module_name, "Normal", "error", "Can't connect to ubus " + str(ex))
 
 if __name__ == "__main__":
-    applyconfig()
+    try:
+        applyconfig()
+
+        if not pollThread:
+            pollThread = Thread(target=poll, args=())
+            pollThread.start()
+
+        ubus.connect()
+
+        ubus.listen(("commit", reconfigure))
+        ubus.loop()
+
+    except KeyboardInterrupt:
+        del reports[:]
+        poll_flag = False
+
+    ubus.disconnect()
