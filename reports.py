@@ -3,6 +3,7 @@ import enum
 import ubus
 import json
 import time
+import schedule
 from datetime import datetime
 from threading import Thread
 from threading import Lock
@@ -24,14 +25,40 @@ class period_type(enum.Enum):
     monthly = 4
 
 class report:
-    name = ""
-    description = ""
-    active = False
-    callbacks = None
-    method = method_type.empty
-    period = period_type.empty
-    report_format = ""
-    settings = {}
+    #name = ""
+    #description = ""
+    #active = False
+    #callbacks = None
+    #method = method_type.empty
+    #period = period_type.empty
+    #report_format = ""
+    #settings = {}
+
+    def __run(self):
+        journal.WriteLog(module_name, "Normal", "notice", "Report callbacks: " + str(self.__callbacks))
+
+    def __init__(self, name, description, active, callbacks, method, period, report_format, settings):
+        self.__name = name
+        self.__description = description
+        self.__active = active
+        self.__callbacks = callbacks
+        self.__method = method
+        self.__period = period
+        self.__report_format = report_format
+        self.__settings = settings
+
+        def run():
+            journal.WriteLog(module_name, "Normal", "notice", "Report callbacks: " + str(self.__callbacks))
+
+        if self.__active:
+            expr = "schedule.every()." + period + ".do(run)"
+            journal.WriteLog(module_name, "Normal", "notice", expr)
+            expr_res = eval(expr)
+
+            if not expr_res:
+                journal.WriteLog(module_name, "Normal", "error", "Wrong schedule expression")
+            #schedule.every().minute.do(self.__func)
+
 
 module_name = "Reports"
 
@@ -50,7 +77,7 @@ mutex = Lock()
 pollThread = None
 ubusConnected = False
 poll_flag = True
-default_report = report()
+default_report = None
 max_reports = 20
 
 def reconfigure(event, data):
@@ -69,21 +96,8 @@ def poll():
     global poll_flag
 
     while poll_flag:
-        mutex.acquire()
-
-        if not reports:
-            mutex.release()
-            time.sleep(1)
-            continue
-
-        for r in reports:
-            if r.active:
-                journal.WriteLog(module_name, "Normal", "notice", "Report name:" + r.name)
-                journal.WriteLog(module_name, "Normal", "notice", "Report description:" + r.description)
-                journal.WriteLog(module_name, "Normal", "notice", "Report callbacks:" + str(r.callbacks))
-                journal.WriteLog(module_name, "Normal", "notice", "Report settings:" + str(r.settings))
-
-        mutex.release()
+        schedule.run_pending()
+        time.sleep(1)
 
 def applyconfig():
     global pollThread
@@ -96,65 +110,57 @@ def applyconfig():
         confvalues = ubus.call("uci", "get", {"config": confName})
         for confdict in list(confvalues[0]['values'].values()):
             if confdict['.type'] == 'report' and confdict['.name'] == 'prototype':
-                default_report.name = confdict['name']
-                default_report.active = bool(int(confdict['state']))
-                default_report.description = confdict['description']
-                default_report.callbacks = json.loads(confdict['callbacks'])
-                default_report.method = method_type_map[confdict['method']]
-                default_report.period = period_type_map[confdict['period']]
-                default_report.report_format = confdict['text']
+                #default_report.name = confdict['name']
+                #default_report.active = bool(int(confdict['state']))
+                #default_report.description = confdict['description']
+                #default_report.callbacks = json.loads(confdict['callbacks'])
+                #default_report.method = method_type_map[confdict['method']]
+                #default_report.period = period_type_map[confdict['schedule']]
+                #default_report.period = confdict['schedule']
+                #default_report.report_format = confdict['text']
 
-            if confdict['.type'] == 'report' and confdict['.name'] != 'prototype':
-                exist = False
-                r = report()
-                r.name = confdict['name']
-
-                for element in reports:
-                    if element.name == e.name:
-                        journal.WriteLog(module_name, "Normal", "error", "Report with name " + e.name + " is exists!")
-                        exist = True
-                        break
-
-                if r.name == '':
-                    journal.WriteLog(module_name, "Normal", "error", "Name can't be empty")
-                    continue
-
-                if exist:
-                    continue
-
-                try:
-                    r.active = bool(int(confdict['state']))
-                except:
-                    r.active = default_report.active
-
-                #TODO fill another parameters
-                try:
-                    r.description = confdict['description']
-                except:
-                    r.description = default_report.description
-
-                try:
-                    r.callbacks = json.loads(confdict['callbacks'])
-                except:
-                    r.callbacks = default_report.callbacks
-
-                try:
-                    r.method = method_type_map[confdict['method']]
-                except:
-                    r.method = default_report.method
-
-                try:
-                    r.period = period_type_map[confdict['period']]
-                except:
-                    r.period = default_report.period
-
-                try:
-                    r.report_format = confdict['text']
-                except:
-                    r.report_format = default_report.report_format
+                name = confdict['name']
+                active = bool(int(confdict['state']))
+                description = confdict['description']
+                callbacks = json.loads(confdict['callbacks'])
+                method = method_type_map[confdict['method']]
+                period = confdict['schedule']
+                report_format = confdict['text']
+                settings = {}
 
                 #TODO settings parse
 
+                #default_report = report(name, description, active, callbacks, method, period, report_format, settings)
+
+            if confdict['.type'] == 'report' and confdict['.name'] != 'prototype':
+                exist = False
+                #r.name = confdict['name']
+
+                #for element in reports:
+                #    if element.name == e.name:
+                #        journal.WriteLog(module_name, "Normal", "error", "Report with name " + e.name + " is exists!")
+                #        exist = True
+                #        break
+
+                #if r.name == '':
+                #    journal.WriteLog(module_name, "Normal", "error", "Name can't be empty")
+                #    continue
+
+                #if exist:
+                #    continue
+                name = confdict['name']
+                active = bool(int(confdict['state']))
+                description = confdict['description']
+                callbacks = json.loads(confdict['callbacks'])
+                method = method_type_map[confdict['method']]
+                period = confdict['schedule']
+                report_format = confdict['text']
+                settings = {}
+
+                #TODO settings parse
+
+                r = report(name, description, active, callbacks, method, period, report_format, settings)
+                
                 mutex.acquire()
 
                 if len(reports) == max_reports:
