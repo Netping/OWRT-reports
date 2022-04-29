@@ -25,18 +25,10 @@ class period_type(enum.Enum):
     monthly = 4
 
 class report:
-    #name = ""
-    #description = ""
-    #active = False
-    #callbacks = None
-    #method = method_type.empty
-    #period = period_type.empty
-    #report_format = ""
-    #settings = {}
+    #def __run(self):
+    #    journal.WriteLog(module_name, "Normal", "notice", "Report callbacks: " + str(self.__callbacks))
 
-    def __run(self):
-        journal.WriteLog(module_name, "Normal", "notice", "Report callbacks: " + str(self.__callbacks))
-
+        
     def __init__(self, name, description, active, callbacks, method, period, report_format, settings):
         self.__name = name
         self.__description = description
@@ -49,6 +41,14 @@ class report:
 
         def run():
             journal.WriteLog(module_name, "Normal", "notice", "Report callbacks: " + str(self.__callbacks))
+            #TODO ubus call for getting parameters
+            #TODO generate text from report_format
+            text = report_format
+
+            if self.__method == method_type.email:
+            for addr in self.__settings['toaddr']:
+                ubus.call("owrt_email", "send_mail", { "fromaddr":self.__settings['fromaddr'], "toaddr":addr, "text": text, "subject":self.__settings['subject'] ,"signature":self.__settings['signature'], "ubus_rpc_session":"1" })
+
 
         if self.__active:
             expr = "schedule.every()." + period + ".do(run)"
@@ -57,7 +57,6 @@ class report:
 
             if not expr_res:
                 journal.WriteLog(module_name, "Normal", "error", "Wrong schedule expression")
-            #schedule.every().minute.do(self.__func)
 
 
 module_name = "Reports"
@@ -65,13 +64,18 @@ module_name = "Reports"
 reports = []
 confName = 'reportsconf'
 
-method_type_map = { 'email' : method_type.email,
-                    'snmptrap' : method_type.snmptrap }
+method_type_map = { 
+                    'empty' : method_type.empty,
+                    'email' : method_type.email,
+                    'snmptrap' : method_type.snmptrap
+                }
 
-period_type_map = { 'hourly' : period_type.hourly,
+period_type_map = { 
+                    'hourly' : period_type.hourly,
                     'daily' : period_type.daily,
                     'weekly' : period_type.weekly,
-                    'monthly' : period_type.monthly }
+                    'monthly' : period_type.monthly 
+                }
 
 mutex = Lock()
 pollThread = None
@@ -96,6 +100,7 @@ def poll():
     global poll_flag
 
     while poll_flag:
+        journal.WriteLog(module_name, "Normal", "notice", "run_pending")
         schedule.run_pending()
         time.sleep(1)
 
@@ -110,15 +115,6 @@ def applyconfig():
         confvalues = ubus.call("uci", "get", {"config": confName})
         for confdict in list(confvalues[0]['values'].values()):
             if confdict['.type'] == 'report' and confdict['.name'] == 'prototype':
-                #default_report.name = confdict['name']
-                #default_report.active = bool(int(confdict['state']))
-                #default_report.description = confdict['description']
-                #default_report.callbacks = json.loads(confdict['callbacks'])
-                #default_report.method = method_type_map[confdict['method']]
-                #default_report.period = period_type_map[confdict['schedule']]
-                #default_report.period = confdict['schedule']
-                #default_report.report_format = confdict['text']
-
                 name = confdict['name']
                 active = bool(int(confdict['state']))
                 description = confdict['description']
@@ -128,26 +124,52 @@ def applyconfig():
                 report_format = confdict['text']
                 settings = {}
 
-                #TODO settings parse
+                #settings parse
+                if method == method_type.empty:
+                    pass
+                elif method == method_type.email:
+                    try:
+                        settings['fromaddr'] = confdict['from']
+                    except:
+                        settings['fromaddr'] = ''
 
-                #default_report = report(name, description, active, callbacks, method, period, report_format, settings)
+                    try:
+                        settings['subject'] = confdict['subject']
+                    except:
+                        settings['subject'] = ''
+
+                    try:
+                        settings['signature'] = confdict['signature']
+                    except:
+                        settings['signature'] = ''
+
+                    try:
+                        settings['toaddr'] = [ a for a in confdict['sendto'].split(',')]
+                    except:
+                        settings['toaddr'] = []
+                elif method == method_type.snmptrap:
+                    try:
+                        settings['url'] = confdict['url']
+                    except:
+                        settings['url'] = ''
+
+                    try:
+                        settings['oid'] = confdict['oid']
+                    except:
+                        settings['oid'] = ''
+
+                    try:
+                        settings['port'] = confdict['port']
+                    except:
+                        settings['port'] = ''
+                else:
+                    journal.WriteLog(module_name, "Normal", "error", "Wrong method type. Settings is empty")
+
+                default_report = report(name, description, active, callbacks, method, period, report_format, settings)
 
             if confdict['.type'] == 'report' and confdict['.name'] != 'prototype':
                 exist = False
-                #r.name = confdict['name']
 
-                #for element in reports:
-                #    if element.name == e.name:
-                #        journal.WriteLog(module_name, "Normal", "error", "Report with name " + e.name + " is exists!")
-                #        exist = True
-                #        break
-
-                #if r.name == '':
-                #    journal.WriteLog(module_name, "Normal", "error", "Name can't be empty")
-                #    continue
-
-                #if exist:
-                #    continue
                 name = confdict['name']
                 active = bool(int(confdict['state']))
                 description = confdict['description']
@@ -157,7 +179,44 @@ def applyconfig():
                 report_format = confdict['text']
                 settings = {}
 
-                #TODO settings parse
+                #settings parse
+                if method == method_type.email:
+                    try:
+                        settings['fromaddr'] = confdict['from']
+                    except:
+                        settings['fromaddr'] = ''
+
+                    try:
+                        settings['subject'] = confdict['subject']
+                    except:
+                        settings['subject'] = ''
+
+                    try:
+                        settings['signature'] = confdict['signature']
+                    except:
+                        settings['signature'] = ''
+
+                    try:
+                        settings['toaddr'] = [ a for a in confdict['sendto'].split(',')]
+                    except:
+                        settings['toaddr'] = []
+                elif method == method_type.snmptrap:
+                    try:
+                        settings['url'] = confdict['url']
+                    except:
+                        settings['url'] = ''
+
+                    try:
+                        settings['oid'] = confdict['oid']
+                    except:
+                        settings['oid'] = ''
+
+                    try:
+                        settings['port'] = confdict['port']
+                    except:
+                        settings['port'] = ''
+                else:
+                    journal.WriteLog(module_name, "Normal", "error", "Wrong method type. Settings is empty")
 
                 r = report(name, description, active, callbacks, method, period, report_format, settings)
                 

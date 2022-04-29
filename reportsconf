@@ -11,7 +11,7 @@ config report 'prototype'
 	option description 'Description text here'
 	option state '0'
 	option callbacks '[ { "module" : "owrt_module", "method" : "owrt_method", "input_parameters" : { "parameter" : "value" }, "output_parameters" : { "parameter" : "" } } ]'
-	option method 'email'
+	option method 'empty'
 	option schedule 'none'
 	option text 'Default text'
 

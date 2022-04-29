@@ -5,7 +5,7 @@ TITLE="OWRT-reports"
 PKG_NAME="OWRT-reports"
 PKG_VERSION="0.1"
 PKG_RELEASE=1
-PKG_DEPENDS=OWRT-log
+PKG_DEPENDS=OWRT-log OWRT-email
 
 MODULE_FILES=reports.py Configname
 MODULE_FILES_DIR=/etc/netping/reports/
