@@ -4,6 +4,7 @@ import ubus
 import json
 import time
 import schedule
+import re
 from datetime import datetime
 from threading import Thread
 from threading import Lock
@@ -36,7 +37,6 @@ class report:
         self.__settings = settings
 
         def run():
-            journal.WriteLog(module_name, "Normal", "notice", "Report callbacks: " + str(self.__callbacks))
             #ubus call for getting parameters
             callbacks = self.__callbacks
             messages = []
@@ -49,15 +49,30 @@ class report:
 
                 m = { 
                         "name" : c['module'],
+                        "method" : c['method'],
                         "result" : result
                     }
                 messages.append(m)
-            #TODO generate text from report_format
+
+            #generate text from report_format
             text = report_format
+            result = re.findall(r'%_(\S+)_%', text)
+            result = set(result)
+
+            for r in result:
+                r_module = r.split('|')[0]
+                r_method = r.split('|')[1]
+                r_result = r.split('|')[2]
+
+                for m in messages:
+                    if m['name'] == r_module and m['method'] == r_method:
+                        res = m['result'][0]
+                        text = text.replace("%_" + r + "_%", res[r_result])
+                        break
 
             if self.__method == method_type.email:
-                #for addr in self.__settings['toaddr']:
-                #    ubus.call("owrt_email", "send_mail", { "fromaddr":self.__settings['fromaddr'], "toaddr":addr, "text": text, "subject":self.__settings['subject'] ,"signature":self.__settings['signature'], "ubus_rpc_session":"1" })
+                for addr in self.__settings['toaddr']:
+                    ubus.call("owrt_email", "send_mail", { "fromaddr":self.__settings['fromaddr'], "toaddr":addr, "text": text, "subject":self.__settings['subject'] ,"signature":self.__settings['signature'], "ubus_rpc_session":"1" })
 
 
         if self.__active:
@@ -135,6 +150,7 @@ def applyconfig():
                 #settings parse
                 if default_method == method_type.empty:
                     pass
+
                 elif default_method == method_type.email:
                     try:
                         default_settings['fromaddr'] = confdict['from']
@@ -155,6 +171,7 @@ def applyconfig():
                         default_settings['toaddr'] = [ a for a in confdict['sendto'].split(',')]
                     except:
                         default_settings['toaddr'] = []
+
                 elif default_method == method_type.snmptrap:
                     try:
                         default_settings['url'] = confdict['url']
@@ -170,6 +187,7 @@ def applyconfig():
                         default_settings['port'] = confdict['port']
                     except:
                         default_settings['port'] = ''
+
                 else:
                     journal.WriteLog(module_name, "Normal", "error", "Wrong method type. Settings is empty")
 
