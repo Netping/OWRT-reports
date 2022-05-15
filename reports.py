@@ -25,8 +25,16 @@ class period_type(enum.Enum):
     weekly = 3
     monthly = 4
 
+mutex = Lock()
+ubusConnected = False
+default_report = None
+max_reports = 20
+
 class report:
+    unusable_id_list = list(range(1, max_reports + 1))
+
     def __init__(self, name, description, active, callbacks, method, period, report_format, settings):
+        self.__id = report.unusable_id_list.pop(0)
         self.__name = name
         self.__description = description
         self.__active = active
@@ -60,9 +68,10 @@ class report:
             result = set(result)
 
             for r in result:
-                r_module = r.split('|')[0]
-                r_method = r.split('|')[1]
-                r_result = r.split('|')[2]
+                splited = r.split('|')
+                r_module = splited[0]
+                r_method = splited[1]
+                r_result = splited[2]
 
                 for m in messages:
                     if m['name'] == r_module and m['method'] == r_method:
@@ -74,6 +83,9 @@ class report:
                 for addr in self.__settings['toaddr']:
                     ubus.call("owrt_email", "send_mail", { "fromaddr":self.__settings['fromaddr'], "toaddr":addr, "text": text, "subject":self.__settings['subject'] ,"signature":self.__settings['signature'], "ubus_rpc_session":"1" })
 
+            elif self.__method == method_type.snmptrap:
+                for addr in self.__settings['toaddr']:
+                    os.system('snmptrap -c public -v 2c ' + addr + ':' + self.__settings['port'] + ' "" ' + self.__settings['oid'] + ' 1 s "' + text + '"')
 
         if self.__active:
             expr = "schedule.every()." + period + ".do(run)"
@@ -83,6 +95,21 @@ class report:
             if not expr_res:
                 journal.WriteLog(module_name, "Normal", "error", "Wrong schedule expression")
 
+    def get_id(self):
+        return self.__id
+
+    def get_name(self):
+        return self.__name
+
+    def __del__(self):
+        if not report.unusable_id_list:
+            report.unusable_id_list.append(self.__id)
+            return
+
+        for i in range(0, len(report.unusable_id_list)):
+            if self.__id <= report.unusable_id_list[i]:
+                report.unusable_id_list.insert(i, self.__id)
+                break
 
 module_name = "Reports"
 
@@ -102,24 +129,33 @@ period_type_map = {
                     'monthly' : period_type.monthly 
                 }
 
-mutex = Lock()
-ubusConnected = False
-default_report = None
-max_reports = 20
-
 def reconfigure(event, data):
     if data['config'] == confName:
-        mutex.acquire()
-
-        del reports[:]
-
-        mutex.release()
-
         journal.WriteLog(module_name, "Normal", "notice", "Config changed!")
 
-        applyconfig()
+        #applyconfig()
+        current_reports = applyconfig()
+        delete_ids = []
+
+        for r in reports:
+            found = False
+
+            for c_r in current_reports:
+                if r.get_name() == c_r.get_name():
+                    found = True
+                    break
+
+            if not found:
+                delete_ids.append(r.get_id())
+
+        for r in reports:
+            for d in delete_ids:
+                if r.get_id() == d.get_id():
+                    reports.remove(r)
+                    break
 
 def applyconfig():
+    result = []
     global ubusConnected
 
     try:
@@ -174,9 +210,9 @@ def applyconfig():
 
                 elif default_method == method_type.snmptrap:
                     try:
-                        default_settings['url'] = confdict['url']
+                        default_settings['toaddr'] = confdict['toaddr']
                     except:
-                        default_settings['url'] = ''
+                        default_settings['toaddr'] = ''
 
                     try:
                         default_settings['oid'] = confdict['oid']
@@ -256,9 +292,9 @@ def applyconfig():
                         settings['toaddr'] = []
                 elif method == method_type.snmptrap:
                     try:
-                        settings['url'] = confdict['url']
+                        settings['toaddr'] = confdict['toaddr']
                     except:
-                        settings['url'] = ''
+                        settings['toaddr'] = ''
 
                     try:
                         settings['oid'] = confdict['oid']
@@ -274,16 +310,12 @@ def applyconfig():
                     journal.WriteLog(module_name, "Normal", "error", "Wrong method type. Settings is default")
 
                 r = report(name, description, active, callbacks, method, period, report_format, settings)
-                
-                mutex.acquire()
 
-                if len(reports) == max_reports:
+                if len(result) == max_reports:
                     journal.WriteLog(module_name, "Normal", "error", "Max reports exceeded")
                     continue
 
-                reports.append(r)
-
-                mutex.release()
+                result.append(r)
 
         if not ubusConnected:
             ubus.disconnect()
@@ -291,11 +323,13 @@ def applyconfig():
     except Exception as ex:
         journal.WriteLog(module_name, "Normal", "error", "Can't connect to ubus " + str(ex))
 
+    return result
+
 if __name__ == "__main__":
     journal.WriteLog(module_name, "Normal", "notice", "Module " + module_name + " started!")
 
     try:
-        applyconfig()
+        reports = applyconfig()
 
         ubus.connect()
 
