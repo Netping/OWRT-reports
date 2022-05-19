@@ -81,7 +81,7 @@ class report:
 
             if self.__method == method_type.email:
                 for addr in self.__settings['toaddr']:
-                    ubus.call("owrt_email", "send_mail", { "fromaddr":self.__settings['fromaddr'], "toaddr":addr, "text": text, "subject":self.__settings['subject'] ,"signature":self.__settings['signature'], "ubus_rpc_session":"1" })
+                    ubus.call("owrt_email", "send_mail", { "fromaddr":self.__settings['fromaddr'], "toaddr":addr, "text": text, "subject":self.__settings['subject'] ,"signature":self.__settings['signature'], "ubus_rpc_session":"" })
 
             elif self.__method == method_type.snmptrap:
                 for addr in self.__settings['toaddr']:
@@ -128,6 +128,38 @@ period_type_map = {
                     'weekly' : period_type.weekly,
                     'monthly' : period_type.monthly 
                 }
+
+def ubus_init_callbacks():
+    def get_reports_callback(event, data):
+        ret_val = { 'retcode' : '-1' }
+
+        mutex.acquire()
+
+        ret_val['reports'] = []
+
+        for r in reports:
+            obj = { 'name' : r.get_name(),
+                    'id' : r.get_id() }
+
+            ret_val['reports'].append(obj)
+
+        mutex.release()
+
+        ret_val['reports'] = str(ret_val['reports'])
+        ret_val['retcode'] = 0
+
+        event.reply(ret_val)
+
+    ubus.add(
+            'owrt_reports', {
+                'get_report_state': {
+                    'method': get_reports_callback,
+                    'signature': {
+                        'name': ubus.BLOBMSG_TYPE_STRING
+                    }
+                }
+            }
+        )
 
 def reconfigure(event, data):
     if data['config'] == confName:
@@ -332,6 +364,8 @@ if __name__ == "__main__":
         reports = applyconfig()
 
         ubus.connect()
+
+        ubus_init_callbacks()
 
         while True:
             schedule.run_pending()
