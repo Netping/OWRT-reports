@@ -152,10 +152,10 @@ def ubus_init_callbacks():
 
     ubus.add(
             'owrt_reports', {
-                'get_report_state': {
+                'get_reports': {
                     'method': get_reports_callback,
                     'signature': {
-                        'name': ubus.BLOBMSG_TYPE_STRING
+                        'ubus_rpc_session': ubus.BLOBMSG_TYPE_STRING
                     }
                 }
             }
