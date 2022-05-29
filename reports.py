@@ -122,13 +122,6 @@ method_type_map = {
                     'snmptrap' : method_type.snmptrap
                 }
 
-period_type_map = { 
-                    'hourly' : period_type.hourly,
-                    'daily' : period_type.daily,
-                    'weekly' : period_type.weekly,
-                    'monthly' : period_type.monthly 
-                }
-
 def ubus_init_callbacks():
     def get_reports_callback(event, data):
         ret_val = { 'retcode' : '-1' }

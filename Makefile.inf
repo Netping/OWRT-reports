@@ -4,7 +4,7 @@ TITLE="OWRT-reports"
 
 PKG_NAME="OWRT-reports"
 PKG_VERSION="0.1"
-PKG_RELEASE=5
+PKG_RELEASE=6
 PKG_DEPENDS=OWRT-log OWRT-email
 
 MODULE_FILES=reports.py Configname
