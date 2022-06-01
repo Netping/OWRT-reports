@@ -4,8 +4,8 @@ TITLE="OWRT-reports"
 
 PKG_NAME="OWRT-reports"
 PKG_VERSION="0.1"
-PKG_RELEASE=7
-PKG_DEPENDS=OWRT-log OWRT-email
+PKG_RELEASE=8
+PKG_DEPENDS=OWRT-log OWRT-email OWRT-PLIB-ubus OWRT-PLIB-schedule
 
 MODULE_FILES=reports.py Configname
 MODULE_FILES_DIR=/etc/netping/reports/
